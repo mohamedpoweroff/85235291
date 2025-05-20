@@ -38,6 +38,11 @@ Button createButton(const char* imagePath, float scale) {
     Button btn;
     SDL_Surface* original = IMG_Load(imagePath);
     
+    if (!original) {
+        printf("Failed to load image %s: %s\n", imagePath, IMG_GetError());
+        exit(1);
+    }
+    
     btn.image = resizeSurface(original, scale);
     btn.position.x = 0;
     btn.position.y = 0;
@@ -63,7 +68,6 @@ void fadeTransition(SDL_Surface* screen, SDL_Surface* from, SDL_Surface* to, int
 }
 
 void startGame(SDL_Surface* screen) {
-    // Change to game music
     Mix_HaltMusic();
     Mix_Music* gameMusic = Mix_LoadMUS("music2.mp3");
     if(!gameMusic) {
@@ -72,7 +76,6 @@ void startGame(SDL_Surface* screen) {
         Mix_PlayMusic(gameMusic, -1);
     }
 
-    // Launch game executable
     pid_t pid = fork();
     if (pid == 0) {
         if(chdir("integration1") != 0) {
@@ -97,6 +100,44 @@ void startGame(SDL_Surface* screen) {
     }
 }
 
+void startOptionProgram(SDL_Surface* screen) {
+    Mix_HaltMusic();
+    Mix_Music* gameMusic = Mix_LoadMUS("music2.mp3");
+    if(!gameMusic) {
+        printf("Failed to load game music: %s\n", Mix_GetError());
+    } else {
+        Mix_PlayMusic(gameMusic, -1);
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        if(chdir("kh") != 0) {
+            printf("Failed to change directory: %s\n", strerror(errno));
+            exit(1);
+        }
+        execl("./prog", "./prog", NULL);
+        printf("Failed to execute option program: %s\n", strerror(errno));
+        exit(1);
+    } 
+    else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+        
+        if(gameMusic) {
+            Mix_HaltMusic();
+            Mix_FreeMusic(gameMusic);
+        }
+    }
+    else {
+        printf("Failed to fork: %s\n", strerror(errno));
+    }
+}
+
+void startHistoryProgram(SDL_Surface* screen) {
+    printf("History button clicked!\n");
+    // Implement history program launch here
+}
+
 int main(int argc, char* argv[]) {
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         printf("SDL_Init error: %s\n", SDL_GetError());
@@ -113,8 +154,8 @@ int main(int argc, char* argv[]) {
         Mix_PlayMusic(music, -1);
     }
 
-    SDL_Surface* menu1 = IMG_Load("menu.jpg");
-    SDL_Surface* menu2 = IMG_Load("menu2.jpg");
+    SDL_Surface* menu1 = IMG_Load("back.jpeg");
+    SDL_Surface* menu2 = IMG_Load("menu2.png");
     SDL_Surface* menu3 = IMG_Load("menu3.png");
     SDL_Surface* menu4 = IMG_Load("menu4.png");
     
@@ -123,30 +164,44 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Create buttons (no hover states)
-    Button jouerBtn = createButton("jouer.png", 1.0);
-    Button optionBtn = createButton("option.png", 0.5);
-    Button quitterBtn = createButton("quitter.png", 0.5);
-    Button nvBtn = createButton("nv.png", 0.7);
-    Button enBtn = createButton("en.png", 0.7); // Nouveau bouton anglais
+    // Create main menu buttons with scale 1.2
+    Button jouerBtn = createButton("jouer.png", 1.2);
+    Button optionBtn = createButton("option.png", 1.2);
+    Button histoireBtn = createButton("histoire.png", 1.2);
+    Button quitterBtn = createButton("quitter.png", 1.2);
+    
+    // Create page 2 buttons with same scale (1.2)
+    Button nvBtn = createButton("nv.png", 1.2);
+    Button enBtn = createButton("en.png", 1.2);
 
-    // Position buttons
-    jouerBtn.position.x = (1024 - jouerBtn.image->w)/2;
-    jouerBtn.position.y = (1024 - jouerBtn.image->h)/2 - 100;
+    // Position main menu buttons vertically at bottom center
+    int buttonX = (1280 - jouerBtn.image->w) / 2;
+    int startY = 720 - (jouerBtn.image->h * 4 + 30 * 3); // 30px space between buttons
     
-    optionBtn.position.x = 50;
-    optionBtn.position.y = 1024 - optionBtn.image->h - 50;
+    jouerBtn.position.x = buttonX;
+    jouerBtn.position.y = startY;
     
-    quitterBtn.position.x = 1024 - quitterBtn.image->w - 50;
-    quitterBtn.position.y = 1024 - quitterBtn.image->h - 50;
+    optionBtn.position.x = buttonX;
+    optionBtn.position.y = startY + jouerBtn.image->h + 30;
     
-    nvBtn.position.x = (1024 - nvBtn.image->w)/2;
-    nvBtn.position.y = (1024 - nvBtn.image->h)/2 ;
+    histoireBtn.position.x = buttonX;
+    histoireBtn.position.y = startY + jouerBtn.image->h * 2 + 30 * 2;
     
-    enBtn.position.x = (1024 - enBtn.image->w) - 140;
-    enBtn.position.y = (1024 - enBtn.image->h) + 50;
+    quitterBtn.position.x = buttonX;
+    quitterBtn.position.y = startY + jouerBtn.image->h * 3 + 30 * 3;
+    
+    // Position page 2 buttons at bottom center with spacing
+    int page2TotalWidth = nvBtn.image->w + enBtn.image->w + 40;
+    int page2StartX = (1280 - page2TotalWidth) / 2;
+    int page2ButtonY = 720 - nvBtn.image->h - 50; // 50px from bottom
+    
+    nvBtn.position.x = page2StartX;
+    nvBtn.position.y = page2ButtonY;
+    
+    enBtn.position.x = page2StartX + nvBtn.image->w + 40;
+    enBtn.position.y = page2ButtonY;
 
-    SDL_Surface* screen = SDL_SetVideoMode(1024, 1024, 32, SDL_SWSURFACE);
+    SDL_Surface* screen = SDL_SetVideoMode(1280, 720, 32, SDL_SWSURFACE);
 
     #define LOADING_FRAMES 12
     SDL_Surface* loadingFrames[LOADING_FRAMES];
@@ -178,21 +233,24 @@ int main(int argc, char* argv[]) {
                 int mouseY = event.button.y;
                 
                 if(currentScreen == 1) {
-                    // Check jouer button click (exact position)
                     if(mouseX >= jouerBtn.position.x && 
                        mouseX <= jouerBtn.position.x + jouerBtn.image->w &&
                        mouseY >= jouerBtn.position.y && 
                        mouseY <= jouerBtn.position.y + jouerBtn.image->h) {
                         currentScreen = 2;
                     }
-                    // Check option button click
                     else if(mouseX >= optionBtn.position.x && 
                             mouseX <= optionBtn.position.x + optionBtn.image->w &&
                             mouseY >= optionBtn.position.y && 
                             mouseY <= optionBtn.position.y + optionBtn.image->h) {
-                        printf("Options button clicked!\n");
+                        startOptionProgram(screen);
                     }
-                    // Check quitter button click
+                    else if(mouseX >= histoireBtn.position.x && 
+                            mouseX <= histoireBtn.position.x + histoireBtn.image->w &&
+                            mouseY >= histoireBtn.position.y && 
+                            mouseY <= histoireBtn.position.y + histoireBtn.image->h) {
+                        startHistoryProgram(screen);
+                    }
                     else if(mouseX >= quitterBtn.position.x && 
                             mouseX <= quitterBtn.position.x + quitterBtn.image->w &&
                             mouseY >= quitterBtn.position.y && 
@@ -201,7 +259,6 @@ int main(int argc, char* argv[]) {
                     }
                 } 
                 else if(currentScreen == 2) {
-                    // Check nv button click
                     if(mouseX >= nvBtn.position.x && 
                        mouseX <= nvBtn.position.x + nvBtn.image->w &&
                        mouseY >= nvBtn.position.y && 
@@ -210,7 +267,6 @@ int main(int argc, char* argv[]) {
                         currentScreen = 3;
                         startLoadingTime = SDL_GetTicks();
                     }
-                    // Check en button click
                     else if(mouseX >= enBtn.position.x && 
                             mouseX <= enBtn.position.x + enBtn.image->w &&
                             mouseY >= enBtn.position.y && 
@@ -249,13 +305,14 @@ int main(int argc, char* argv[]) {
         SDL_BlitSurface(bg, NULL, screen, NULL);
 
         if(currentScreen == 1) {
-            // Draw buttons without hover effect
+            // Draw main menu buttons vertically at bottom
             SDL_BlitSurface(jouerBtn.image, NULL, screen, &jouerBtn.position);
             SDL_BlitSurface(optionBtn.image, NULL, screen, &optionBtn.position);
+            SDL_BlitSurface(histoireBtn.image, NULL, screen, &histoireBtn.position);
             SDL_BlitSurface(quitterBtn.image, NULL, screen, &quitterBtn.position);
         }
         else if(currentScreen == 2) {
-            // Draw both buttons in page 2
+            // Draw page 2 buttons at bottom
             SDL_BlitSurface(nvBtn.image, NULL, screen, &nvBtn.position);
             SDL_BlitSurface(enBtn.image, NULL, screen, &enBtn.position);
         }
@@ -268,8 +325,8 @@ int main(int argc, char* argv[]) {
 
             SDL_Surface* currentFrame = loadingFrames[loadingIndex];
             SDL_Rect loadingPos;
-            loadingPos.x = (1024 - currentFrame->w) / 2;
-            loadingPos.y = (1024 - currentFrame->h) / 2;
+            loadingPos.x = (1280 - currentFrame->w) / 2;
+            loadingPos.y = (720 - currentFrame->h) / 2;
             SDL_BlitSurface(currentFrame, NULL, screen, &loadingPos);
             
             if (now - startLoadingTime >= 5000) {
@@ -291,6 +348,7 @@ int main(int argc, char* argv[]) {
     SDL_FreeSurface(menu4);
     SDL_FreeSurface(jouerBtn.image);
     SDL_FreeSurface(optionBtn.image);
+    SDL_FreeSurface(histoireBtn.image);
     SDL_FreeSurface(quitterBtn.image);
     SDL_FreeSurface(nvBtn.image);
     SDL_FreeSurface(enBtn.image);
